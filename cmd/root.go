@@ -12,6 +12,7 @@ import (
 )
 
 // rootCmd represents the base command when called without any subcommands
+var n int
 var rootCmd = &cobra.Command{
 	Use:   "destroyer-of-worlds",
 	Short: "Let's destroy the worlds",
@@ -26,8 +27,8 @@ var rootCmd = &cobra.Command{
 		}
 
 		url := args[0]
-		loadTester := core.NewFetcher(url)
-		fmt.Println("Response code: ", loadTester.Fetch().Code)
+		loadTester := core.NewFetcher(url, n)
+		loadTester.Run()
 	},
 }
 
@@ -46,8 +47,6 @@ func init() {
 	// will be global for your application.
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.destroyer-of-worlds.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
+	rootCmd.PersistentFlags().IntVarP(&n, "requests", "n", 1, "The total requests to be sent. Default is 1")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

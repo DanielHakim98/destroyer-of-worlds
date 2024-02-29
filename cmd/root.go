@@ -1,30 +1,34 @@
 /*
 Copyright © 2024 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/DanielHakim98/destroyer-of-worlds/core"
 	"github.com/spf13/cobra"
 )
-
-
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "destroyer-of-worlds",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "Let's destroy the worlds",
+	Long: `Well actually, it's just a fancy name for load tester.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	I mean, have you ever think about break one's server by DDosing it because you kinda hate those guy or that corporate.
+	Well I have great news for you, This is the tool you can use to accomplish your goal`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) < 1 {
+			fmt.Println("No 'url' is given")
+			os.Exit(1)
+		}
+
+		url := args[0]
+		loadTester := core.NewFetcher(url)
+		fmt.Println("Response code: ", loadTester.Fetch().Code)
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -47,5 +51,3 @@ func init() {
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
-
-

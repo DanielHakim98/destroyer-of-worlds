@@ -104,26 +104,11 @@ func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) 
 	results := make([]Response, 0, number)
 	message := make(chan Response, number)
 	sem := make(chan struct{}, maxConcurrent)
+
 	var wg sync.WaitGroup
 	for i := range number {
 		wg.Add(1)
-		go func() {
-			sem <- struct{}{}
-			defer func() {
-				wg.Done()
-				<-sem
-			}()
-			resp, err := http.Get(url)
-			if err != nil {
-				log.Println(err)
-				message <- Response{}
-				return
-			}
-			defer resp.Body.Close()
-
-			message <- Response{Code: resp.StatusCode}
-		}()
-
+		go f.worker(&wg, sem, url, message)
 		if i%maxConcurrent == 0 && i != number {
 			time.Sleep(50 * time.Millisecond)
 		}
@@ -140,6 +125,23 @@ func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) 
 	}
 
 	return results
+}
+
+func (f *Fetcher) worker(wg *sync.WaitGroup, sem chan struct{}, url string, message chan<- Response) {
+	sem <- struct{}{}
+	defer func() {
+		wg.Done()
+		<-sem
+	}()
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Println(err)
+		message <- Response{}
+		return
+	}
+	defer resp.Body.Close()
+
+	message <- Response{Code: resp.StatusCode}
 }
 
 func (f *Fetcher) countStatus(code int) {

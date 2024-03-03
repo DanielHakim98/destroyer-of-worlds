@@ -53,16 +53,26 @@ func NewFetcher(url string, number int, concurrent int) *Fetcher {
 }
 
 func (f *Fetcher) Summary() {
-	success := f.summary[SUCCESSFUL_RES]
+	total := float64(f.quantity)
 	var fails int
 	for key, val := range f.summary {
-		if key != SUCCESSFUL_RES {
+		if key == CLIENT_ERROR_RES || key == SERVER_ERROR_RES || key == UNKNOWN_RES {
 			fails += val
 			continue
 		}
 	}
-	fmt.Println("Successes: ", success)
-	fmt.Println("Failures: ", fails)
+
+	var totalDuration time.Duration
+	for _, response := range f.responses {
+		totalDuration += response.Duration
+	}
+	average := total / totalDuration.Seconds()
+
+	fmt.Println("Results: ")
+	fmt.Println(" Total Requests  (2XX)                  .......................: ", total)
+	fmt.Println(" Failed Requests (4XX, 5XX and unknown) .......................: ", fails)
+	fmt.Println(" Total duration                         .......................: ", totalDuration)
+	fmt.Println(" Request/second                         .......................: ", average)
 }
 
 func (f *Fetcher) Display() {
@@ -82,13 +92,19 @@ func (f *Fetcher) Run() {
 }
 
 func (f *Fetcher) fetch() Response {
+	start := time.Now()
 	resp, err := http.Get(f.url)
 	if err != nil {
 		log.Println(err)
-		return Response{}
+		return Response{
+			Duration: time.Since(start),
+		}
 	}
 	defer resp.Body.Close()
-	return Response{Code: resp.StatusCode}
+	return Response{
+		Code:     resp.StatusCode,
+		Duration: time.Since(start),
+	}
 }
 
 func (f *Fetcher) sequenceFetching() {
@@ -133,15 +149,22 @@ func (f *Fetcher) worker(wg *sync.WaitGroup, sem chan struct{}, url string, mess
 		wg.Done()
 		<-sem
 	}()
+
+	start := time.Now()
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Println(err)
-		message <- Response{}
+		message <- Response{
+			Duration: time.Since(start),
+		}
 		return
 	}
 	defer resp.Body.Close()
 
-	message <- Response{Code: resp.StatusCode}
+	message <- Response{
+		Code:     resp.StatusCode,
+		Duration: time.Since(start),
+	}
 }
 
 func (f *Fetcher) countStatus(code int) {
@@ -171,5 +194,6 @@ func (f *Fetcher) countStatus(code int) {
 }
 
 type Response struct {
-	Code int
+	Code     int
+	Duration time.Duration
 }

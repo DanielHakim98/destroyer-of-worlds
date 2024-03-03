@@ -42,7 +42,6 @@ var rootCmd = &cobra.Command{
 
 		loadTester := core.NewFetcher(_url, _number, _concurrent)
 		loadTester.Run()
-		loadTester.Display()
 		loadTester.Summary()
 	},
 }

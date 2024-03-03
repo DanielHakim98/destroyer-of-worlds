@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 type StatusCodeGroup int
@@ -28,6 +29,7 @@ const (
 type Fetcher struct {
 	url       string
 	quantity  int
+	limit     int
 	fetchType FetchType
 	responses []Response
 	summary   map[StatusCodeGroup]int
@@ -44,6 +46,7 @@ func NewFetcher(url string, number int, concurrent int) *Fetcher {
 	return &Fetcher{
 		url:       url,
 		quantity:  number,
+		limit:     concurrent,
 		fetchType: t,
 		summary:   make(map[StatusCodeGroup]int),
 	}
@@ -73,7 +76,7 @@ func (f *Fetcher) Run() {
 	case SEQUENTIAL:
 		f.sequenceFetching()
 	case CONCURRENT:
-		responses := f.concurrentFetching(f.url, f.quantity)
+		responses := f.concurrentFetching(f.url, f.quantity, f.limit)
 		f.responses = responses
 	}
 }
@@ -97,15 +100,19 @@ func (f *Fetcher) sequenceFetching() {
 	}
 }
 
-func (f *Fetcher) concurrentFetching(url string, number int) []Response {
+func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) []Response {
 	results := make([]Response, 0, number)
 	message := make(chan Response, number)
+	sem := make(chan struct{}, maxConcurrent)
 	var wg sync.WaitGroup
-	for range number {
+	for i := range number {
 		wg.Add(1)
 		go func() {
-			defer wg.Done()
-
+			sem <- struct{}{}
+			defer func() {
+				wg.Done()
+				<-sem
+			}()
 			resp, err := http.Get(url)
 			if err != nil {
 				log.Println(err)
@@ -116,6 +123,10 @@ func (f *Fetcher) concurrentFetching(url string, number int) []Response {
 
 			message <- Response{Code: resp.StatusCode}
 		}()
+
+		if i%maxConcurrent == 0 && i != number {
+			time.Sleep(50 * time.Millisecond)
+		}
 	}
 
 	go func() {

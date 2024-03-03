@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 )
 
 type StatusCodeGroup int
@@ -17,18 +18,34 @@ const (
 	UNKNOWN_RES
 )
 
+type FetchType int
+
+const (
+	SEQUENTIAL FetchType = iota
+	CONCURRENT
+)
+
 type Fetcher struct {
 	url       string
 	quantity  int
+	fetchType FetchType
 	responses []Response
 	summary   map[StatusCodeGroup]int
 }
 
-func NewFetcher(url string, n int) *Fetcher {
+func NewFetcher(url string, number int, concurrent int) *Fetcher {
+	var t FetchType
+	if concurrent == 1 {
+		t = SEQUENTIAL
+	} else {
+		t = CONCURRENT
+	}
+
 	return &Fetcher{
-		url:      url,
-		quantity: n,
-		summary:  make(map[StatusCodeGroup]int),
+		url:       url,
+		quantity:  number,
+		fetchType: t,
+		summary:   make(map[StatusCodeGroup]int),
 	}
 }
 
@@ -52,11 +69,12 @@ func (f *Fetcher) Display() {
 }
 
 func (f *Fetcher) Run() {
-	f.responses = make([]Response, 0, f.quantity)
-	for i := 0; i < f.quantity; i++ {
-		response := f.fetch()
-		f.countStatus(response.Code)
-		f.responses = append(f.responses, response)
+	switch f.fetchType {
+	case SEQUENTIAL:
+		f.sequenceFetching()
+	case CONCURRENT:
+		responses := f.concurrentFetching(f.url, f.quantity)
+		f.responses = responses
 	}
 }
 
@@ -68,6 +86,49 @@ func (f *Fetcher) fetch() Response {
 	}
 	defer resp.Body.Close()
 	return Response{Code: resp.StatusCode}
+}
+
+func (f *Fetcher) sequenceFetching() {
+	f.responses = make([]Response, 0, f.quantity)
+	for i := 0; i < f.quantity; i++ {
+		response := f.fetch()
+		f.countStatus(response.Code)
+		f.responses = append(f.responses, response)
+	}
+}
+
+func (f *Fetcher) concurrentFetching(url string, number int) []Response {
+	results := make([]Response, 0, number)
+	message := make(chan Response, number)
+	var wg sync.WaitGroup
+	for range number {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			resp, err := http.Get(url)
+			if err != nil {
+				log.Println(err)
+				message <- Response{}
+				return
+			}
+			defer resp.Body.Close()
+
+			message <- Response{Code: resp.StatusCode}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(message)
+	}()
+
+	for result := range message {
+		f.countStatus(result.Code)
+		results = append(results, result)
+	}
+
+	return results
 }
 
 func (f *Fetcher) countStatus(code int) {

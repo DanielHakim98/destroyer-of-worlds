@@ -13,8 +13,9 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var (
-	_number int
-	_url    string
+	_number     int
+	_url        string
+	_concurrent int
 )
 
 var rootCmd = &cobra.Command{
@@ -32,7 +33,14 @@ var rootCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		loadTester := core.NewFetcher(_url, _number)
+		if _concurrent <= 0 {
+			fmt.Println(cmd.Help())
+			fmt.Println()
+			fmt.Println("Error: Concurrent worker cannot be zero or negative. Please specify value more than 0")
+			os.Exit(1)
+		}
+
+		loadTester := core.NewFetcher(_url, _number, _concurrent)
 		loadTester.Run()
 		loadTester.Display()
 		loadTester.Summary()
@@ -56,5 +64,6 @@ func init() {
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.destroyer-of-worlds.yaml)")
 	rootCmd.PersistentFlags().IntVarP(&_number, "requests", "n", 1, "The total requests to be sent. Default is 1")
 	rootCmd.PersistentFlags().StringVarP(&_url, "url", "u", "", "URL to be tested.")
+	rootCmd.PersistentFlags().IntVarP(&_concurrent, "concurrent", "c", 1, "maximum concurent request. Default is 1")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

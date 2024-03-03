@@ -26,7 +26,9 @@ var rootCmd = &cobra.Command{
 	Well I have great news for you, This is the tool you can use to accomplish your goal`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if _url == "" {
-			fmt.Println("No 'url' is given")
+			fmt.Println(cmd.Help())
+			fmt.Println()
+			fmt.Println("Error: URL not provided. Please specify a URL using the --url flag.")
 			os.Exit(1)
 		}
 

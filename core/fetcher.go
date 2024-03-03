@@ -45,6 +45,12 @@ func (f *Fetcher) Summary() {
 	fmt.Println("Failures: ", fails)
 }
 
+func (f *Fetcher) Display() {
+	for _, response := range f.responses {
+		fmt.Println("Response code: ", response.Code)
+	}
+}
+
 func (f *Fetcher) Run() {
 	f.responses = make([]Response, 0, f.quantity)
 	for i := 0; i < f.quantity; i++ {
@@ -54,6 +60,16 @@ func (f *Fetcher) Run() {
 	}
 }
 
+func (f *Fetcher) fetch() Response {
+	resp, err := http.Get(f.url)
+	if err != nil {
+		log.Println(err)
+		return Response{}
+	}
+	defer resp.Body.Close()
+	return Response{Code: resp.StatusCode}
+}
+
 func (f *Fetcher) countStatus(code int) {
 	helper := func(group StatusCodeGroup) {
 		_, exists := f.summary[group]
@@ -61,7 +77,6 @@ func (f *Fetcher) countStatus(code int) {
 			f.summary[group]++
 			return
 		}
-
 		f.summary[group] = 1
 	}
 
@@ -78,22 +93,6 @@ func (f *Fetcher) countStatus(code int) {
 		helper(SERVER_ERROR_RES)
 	default:
 		helper(UNKNOWN_RES)
-	}
-}
-
-func (f *Fetcher) fetch() Response {
-	resp, err := http.Get(f.url)
-	if err != nil {
-		log.Println(err)
-		return Response{}
-	}
-	defer resp.Body.Close()
-	return Response{Code: resp.StatusCode}
-}
-
-func (f *Fetcher) Display() {
-	for _, response := range f.responses {
-		fmt.Println("Response code: ", response.Code)
 	}
 }
 

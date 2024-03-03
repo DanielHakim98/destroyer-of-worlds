@@ -12,7 +12,11 @@ import (
 )
 
 // rootCmd represents the base command when called without any subcommands
-var n int
+var (
+	_number int
+	_url    string
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "destroyer-of-worlds",
 	Short: "Let's destroy the worlds",
@@ -21,14 +25,15 @@ var rootCmd = &cobra.Command{
 	I mean, have you ever think about break one's server by DDosing it because you kinda hate those guy or that corporate.
 	Well I have great news for you, This is the tool you can use to accomplish your goal`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 {
+		if _url == "" {
 			fmt.Println("No 'url' is given")
 			os.Exit(1)
 		}
 
-		url := args[0]
-		loadTester := core.NewFetcher(url, n)
+		loadTester := core.NewFetcher(_url, _number)
 		loadTester.Run()
+		loadTester.Display()
+		loadTester.Summary()
 	},
 }
 
@@ -47,6 +52,7 @@ func init() {
 	// will be global for your application.
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.destroyer-of-worlds.yaml)")
-	rootCmd.PersistentFlags().IntVarP(&n, "requests", "n", 1, "The total requests to be sent. Default is 1")
+	rootCmd.PersistentFlags().IntVarP(&_number, "requests", "n", 1, "The total requests to be sent. Default is 1")
+	rootCmd.PersistentFlags().StringVarP(&_url, "url", "u", "", "URL to be tested.")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

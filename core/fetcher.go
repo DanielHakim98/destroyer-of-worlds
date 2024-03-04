@@ -32,6 +32,7 @@ type Fetcher struct {
 	limit     int
 	fetchType FetchType
 	responses []Response
+	execTime  time.Duration
 	summary   map[StatusCodeGroup]int
 }
 
@@ -68,10 +69,13 @@ func (f *Fetcher) Summary() {
 	}
 	average := total / totalDuration.Seconds()
 
+	execTime := f.execTime
+
 	fmt.Println("Results: ")
 	fmt.Println(" Total Requests  (2XX)                  .......................: ", total)
 	fmt.Println(" Failed Requests (4XX, 5XX and unknown) .......................: ", fails)
-	fmt.Println(" Total duration                         .......................: ", totalDuration)
+	fmt.Println(" Total execution time                   .......................: ", execTime)
+	fmt.Println(" Total requests  time                   .......................: ", totalDuration)
 	fmt.Println(" Request/second                         .......................: ", average)
 }
 
@@ -84,10 +88,14 @@ func (f *Fetcher) Display() {
 func (f *Fetcher) Run() {
 	switch f.fetchType {
 	case SEQUENTIAL:
+		timer := logTime("sequenceFetching")
 		f.sequenceFetching()
+		f.execTime = timer()
 	case CONCURRENT:
+		timer := logTime("concurrentFetching")
 		responses := f.concurrentFetching(f.url, f.quantity, f.limit)
 		f.responses = responses
+		f.execTime = timer()
 	}
 }
 
@@ -196,4 +204,13 @@ func (f *Fetcher) countStatus(code int) {
 type Response struct {
 	Code     int
 	Duration time.Duration
+}
+
+func logTime(name string) func() time.Duration {
+	start := time.Now()
+	return func() time.Duration {
+		execTime := time.Since(start)
+		fmt.Printf("'%v' executtion time is %v\n", name, execTime)
+		return execTime
+	}
 }

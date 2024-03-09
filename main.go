@@ -4,19 +4,34 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package main
 
 import (
-	"log"
+	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/pprof"
 
 	"github.com/DanielHakim98/destroyer-of-worlds/cmd"
 )
 
 func main() {
-	f, err := os.Create("destroyer-of-worlds.pprof")
-	if err != nil {
-		log.Fatal(f)
+	profilingPath := os.Getenv("PPROF_PATH")
+	if profilingPath != "" {
+		parent := filepath.Dir(profilingPath)
+		if _, err := os.Stat(parent); os.IsNotExist(err) {
+			err := os.MkdirAll(parent, os.ModePerm)
+			if err != nil {
+				fmt.Println("Error: Failed to create directory from PPROF_PATH")
+				os.Exit(1)
+			}
+		}
+
+		f, err := os.Create(profilingPath)
+		if err != nil {
+			fmt.Println("Error: Failed to create file from PPROF_PATH")
+			os.Exit(1)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
+
 	cmd.Execute()
 }

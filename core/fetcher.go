@@ -26,6 +26,15 @@ const (
 	CONCURRENT
 )
 
+const (
+	SUMMARY_HEADER_DISPLAY       = "Results: "
+	TOTAL_REQUEST_DISPLAY        = "\n Total Requests  (2XX)                  .......................: "
+	FAILED_REQUEST_DISPLAY       = "\n Failed Requests (4XX, 5XX and unknown) .......................: "
+	TOTAL_EXECUTION_TIME_DISPLAY = "\n Total execution time                   .......................: "
+	TOTAL_REQUESTS_TIME_DISPLAY  = "\n Total requests  time                   .......................: "
+	REQUEST_PER_SECOND_DISPLAY   = "\n Request/second                         .......................: "
+)
+
 type Fetcher struct {
 	url       string
 	quantity  int
@@ -55,6 +64,11 @@ func NewFetcher(url string, number int, concurrent int) *Fetcher {
 }
 
 func (f *Fetcher) Summary() {
+	summaryStr := f.genSummary(f.calcSummary())
+	fmt.Println(summaryStr)
+}
+
+func (f *Fetcher) calcSummary() Summary {
 	total := float64(f.quantity)
 	var fails int
 	for key, val := range f.summary {
@@ -69,15 +83,23 @@ func (f *Fetcher) Summary() {
 		totalDuration += response.Duration
 	}
 	average := total / totalDuration.Seconds()
-
 	execTime := f.execTime
+	return Summary{total, average, execTime, totalDuration, fails}
+}
 
-	fmt.Println("Results: ")
-	fmt.Println(" Total Requests  (2XX)                  .......................: ", total)
-	fmt.Println(" Failed Requests (4XX, 5XX and unknown) .......................: ", fails)
-	fmt.Println(" Total execution time                   .......................: ", execTime)
-	fmt.Println(" Total requests  time                   .......................: ", totalDuration)
-	fmt.Println(" Request/second                         .......................: ", average)
+type Summary struct {
+	total, average          float64
+	execTime, totalDuration time.Duration
+	fails                   int
+}
+
+func (f *Fetcher) genSummary(s Summary) string {
+	return SUMMARY_HEADER_DISPLAY +
+		TOTAL_REQUEST_DISPLAY + fmt.Sprint(s.total) +
+		FAILED_REQUEST_DISPLAY + fmt.Sprint(s.fails) +
+		TOTAL_EXECUTION_TIME_DISPLAY + s.execTime.String() +
+		TOTAL_REQUESTS_TIME_DISPLAY + s.totalDuration.String() +
+		REQUEST_PER_SECOND_DISPLAY + fmt.Sprint(s.average)
 }
 
 func (f *Fetcher) Display() {
@@ -89,11 +111,11 @@ func (f *Fetcher) Display() {
 func (f *Fetcher) Run() {
 	switch f.fetchType {
 	case SEQUENTIAL:
-		timer := logTime("sequenceFetching")
+		timer := logTime()
 		f.sequenceFetching()
 		f.execTime = timer()
 	case CONCURRENT:
-		timer := logTime("concurrentFetching")
+		timer := logTime()
 		f.concurrentFetching(f.url, f.quantity, f.limit)
 		f.execTime = timer()
 	}
@@ -202,11 +224,10 @@ type Response struct {
 	Duration time.Duration
 }
 
-func logTime(name string) func() time.Duration {
+func logTime() func() time.Duration {
 	start := time.Now()
 	return func() time.Duration {
 		execTime := time.Since(start)
-		fmt.Printf("'%v' executtion time is %v\n", name, execTime)
 		return execTime
 	}
 }

@@ -94,8 +94,7 @@ func (f *Fetcher) Run() {
 		f.execTime = timer()
 	case CONCURRENT:
 		timer := logTime("concurrentFetching")
-		responses := f.concurrentFetching(f.url, f.quantity, f.limit)
-		f.responses = responses
+		f.concurrentFetching(f.url, f.quantity, f.limit)
 		f.execTime = timer()
 	}
 }
@@ -124,8 +123,7 @@ func (f *Fetcher) sequenceFetching() {
 	}
 }
 
-func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) []Response {
-	results := make([]Response, 0, number)
+func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) {
 	message := make(chan Response, number)
 	sem := make(chan struct{}, maxConcurrent)
 
@@ -145,10 +143,8 @@ func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) 
 
 	for result := range message {
 		f.countStatus(result.Code)
-		results = append(results, result)
+		f.responses = append(f.responses, result)
 	}
-
-	return results
 }
 
 func (f *Fetcher) worker(wg *sync.WaitGroup, sem chan struct{}, url string, message chan<- Response) {

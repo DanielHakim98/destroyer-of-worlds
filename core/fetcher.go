@@ -49,6 +49,7 @@ func NewFetcher(url string, number int, concurrent int) *Fetcher {
 		quantity:  number,
 		limit:     concurrent,
 		fetchType: t,
+		responses: make([]Response, 0, number),
 		summary:   make(map[StatusCodeGroup]int),
 	}
 }
@@ -116,7 +117,6 @@ func (f *Fetcher) fetch() Response {
 }
 
 func (f *Fetcher) sequenceFetching() {
-	f.responses = make([]Response, 0, f.quantity)
 	for i := 0; i < f.quantity; i++ {
 		response := f.fetch()
 		f.countStatus(response.Code)

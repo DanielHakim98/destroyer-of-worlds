@@ -28,6 +28,25 @@ cd www
 python -m http.server
 ```
 
+## Issue
+
+- Refer details in core/fetcher_test.go, I believe the concurrency code is kind of suboptimal. This is the result of benchmarking runs locally and the server tested is python mock server, also run locally:
+
+  ```text
+  $ go test ./core/ -bench=.
+
+  goos: linux
+  goarch: amd64
+  pkg: github.com/DanielHakim98/destroyer-of-worlds/core
+  cpu: Intel(R) Core(TM) i5-8300H CPU @ 2.30GHz
+  BenchmarkFetcherRun-8                          1        5947048191 ns/op
+  BenchmarkFetcherRunConcurrent-8                1        51590994485 ns/op
+  PASS
+  ok      github.com/DanielHakim98/destroyer-of-worlds/core       57.676s
+  ```
+
+  I suspect there might be overhead when setting up concurrency and causes. Will update later after profiling (If I'm not lazy lah)
+
 ## Contributing
 
 Nah, I don't think it's worth it anyway. You can just copy and paste, steal it, or even recreate to do something better, robust and more interesting that this. Or just use **[Hey](https://github.com/rakyll/hey)**.

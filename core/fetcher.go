@@ -43,6 +43,12 @@ type Fetcher struct {
 	responses []Response
 	execTime  time.Duration
 	summary   map[StatusCodeGroup]int
+	stats     Stats
+}
+
+type Stats struct {
+	statusCodes  map[StatusCodeGroup]int
+	requestsTime [3]time.Duration
 }
 
 func NewFetcher(url string, number int, concurrent int) *Fetcher {
@@ -60,6 +66,9 @@ func NewFetcher(url string, number int, concurrent int) *Fetcher {
 		fetchType: t,
 		responses: make([]Response, 0, number),
 		summary:   make(map[StatusCodeGroup]int),
+		stats: Stats{
+			statusCodes: make(map[StatusCodeGroup]int),
+		},
 	}
 }
 
@@ -140,8 +149,27 @@ func (f *Fetcher) fetch() Response {
 func (f *Fetcher) sequenceFetching() {
 	for i := 0; i < f.quantity; i++ {
 		response := f.fetch()
-		f.countStatus(response.Code)
+		f.genStats(response)
 		f.responses = append(f.responses, response)
+	}
+}
+
+func (f *Fetcher) genStats(res Response) {
+	f.countStatusCode(res.Code)
+	f.findMaxMinDur(res.Duration)
+}
+
+func (f *Fetcher) findMaxMinDur(t time.Duration) {
+	curMax := f.stats.requestsTime[0]
+	// If zero valued or larger than current max, then replace
+	if curMax == 0 || t > curMax {
+		f.stats.requestsTime[0] = t
+	}
+
+	curMin := f.stats.requestsTime[1]
+	// Only if t is smaller then current min, then replace
+	if t < curMin {
+		f.stats.requestsTime[1] = t
 	}
 }
 
@@ -164,7 +192,7 @@ func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) 
 	}()
 
 	for result := range message {
-		f.countStatus(result.Code)
+		f.countStatusCode(result.Code)
 		f.responses = append(f.responses, result)
 	}
 }
@@ -193,7 +221,7 @@ func (f *Fetcher) worker(wg *sync.WaitGroup, sem chan struct{}, url string, mess
 	}
 }
 
-func (f *Fetcher) countStatus(code int) {
+func (f *Fetcher) countStatusCode(code int) {
 	helper := func(group StatusCodeGroup) {
 		_, exists := f.summary[group]
 		if exists {

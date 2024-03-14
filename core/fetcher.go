@@ -28,11 +28,14 @@ const (
 
 const (
 	SUMMARY_HEADER_DISPLAY       = "Results: "
-	TOTAL_REQUEST_DISPLAY        = "\n Total Requests  (2XX)                  .......................: "
-	FAILED_REQUEST_DISPLAY       = "\n Failed Requests (4XX, 5XX and unknown) .......................: "
-	TOTAL_EXECUTION_TIME_DISPLAY = "\n Total execution time                   .......................: "
-	TOTAL_REQUESTS_TIME_DISPLAY  = "\n Total requests  time                   .......................: "
-	REQUEST_PER_SECOND_DISPLAY   = "\n Request/second                         .......................: "
+	TOTAL_REQUEST_DISPLAY        = "\n Total Requests  (2XX)                        .......................: "
+	FAILED_REQUEST_DISPLAY       = "\n Failed Requests (4XX, 5XX and unknown)       .......................: "
+	TOTAL_EXECUTION_TIME_DISPLAY = "\n Total execution time                         .......................: "
+	TOTAL_REQUESTS_TIME_DISPLAY  = "\n Total requests  time                         .......................: "
+	REQUEST_PER_SECOND_DISPLAY   = "\n Request/second                               .......................: "
+	STATISTIC_HEADER_DISPLAY     = "\n\nStatistic:"
+	REQUEST_TIME_STATS_DISPLAY   = "\n Request Time (s) (Min, Max, Mean)            .......................: "
+	STATS_TEMPL                  = "(%v, %v, %v)\n"
 )
 
 type Fetcher struct {
@@ -93,13 +96,35 @@ func (f *Fetcher) calcSummary() Summary {
 	}
 	average := total / totalDuration.Seconds()
 	execTime := f.execTime
-	return Summary{total, average, execTime, totalDuration, fails}
+
+	min := f.stats.requestsTime[0]
+	max := f.stats.requestsTime[1]
+	mean := totalDuration.Seconds() / total
+
+	return Summary{
+		total:         total,
+		average:       average,
+		execTime:      execTime,
+		totalDuration: totalDuration,
+		fails:         fails,
+		totalDurStats: struct {
+			min  time.Duration
+			max  time.Duration
+			mean float64
+		}{
+			min, max, mean,
+		},
+	}
 }
 
 type Summary struct {
 	total, average          float64
 	execTime, totalDuration time.Duration
 	fails                   int
+	totalDurStats           struct {
+		min, max time.Duration
+		mean     float64
+	}
 }
 
 func (f *Fetcher) genSummary(s Summary) string {
@@ -108,7 +133,10 @@ func (f *Fetcher) genSummary(s Summary) string {
 		FAILED_REQUEST_DISPLAY + fmt.Sprint(s.fails) +
 		TOTAL_EXECUTION_TIME_DISPLAY + s.execTime.String() +
 		TOTAL_REQUESTS_TIME_DISPLAY + s.totalDuration.String() +
-		REQUEST_PER_SECOND_DISPLAY + fmt.Sprint(s.average)
+		REQUEST_PER_SECOND_DISPLAY + fmt.Sprint(s.average) +
+		STATISTIC_HEADER_DISPLAY +
+		REQUEST_TIME_STATS_DISPLAY + fmt.Sprintf(
+		STATS_TEMPL, s.totalDurStats.min.Seconds(), s.totalDurStats.max.Seconds(), s.totalDurStats.mean)
 }
 
 func (f *Fetcher) Display() {
@@ -160,15 +188,15 @@ func (f *Fetcher) genStats(res Response) {
 }
 
 func (f *Fetcher) findMaxMinDur(t time.Duration) {
-	curMax := f.stats.requestsTime[0]
-	// If zero valued or larger than current max, then replace
-	if curMax == 0 || t > curMax {
+	curMin := f.stats.requestsTime[0]
+	// Only if t is smaller then current min, then replace
+	if curMin == 0 || t < curMin {
 		f.stats.requestsTime[0] = t
 	}
 
-	curMin := f.stats.requestsTime[1]
-	// Only if t is smaller then current min, then replace
-	if t < curMin {
+	curMax := f.stats.requestsTime[1]
+	// If zero valued or larger than current max, then replace
+	if curMax == 0 || t > curMax {
 		f.stats.requestsTime[1] = t
 	}
 }
@@ -192,7 +220,7 @@ func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) 
 	}()
 
 	for result := range message {
-		f.countStatusCode(result.Code)
+		f.genStats(result)
 		f.responses = append(f.responses, result)
 	}
 }

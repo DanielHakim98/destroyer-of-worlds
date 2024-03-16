@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httptrace"
 	"sync"
 	"time"
 )
@@ -35,6 +36,7 @@ const (
 	REQUEST_PER_SECOND_DISPLAY   = "\n Request/second                               .......................: "
 	STATISTIC_HEADER_DISPLAY     = "\n\nStatistic:"
 	REQUEST_TIME_STATS_DISPLAY   = "\n Request Time (s) (Min, Max, Mean)            .......................: "
+	TIME_TO_FIRST_BYTE_DISPLAY   = " Time to First Byte (s) (Min, Max, Mean)      .......................: "
 	STATS_TEMPL                  = "(%v, %v, %v)\n"
 )
 
@@ -52,6 +54,7 @@ type Fetcher struct {
 type Stats struct {
 	statusCodes  map[StatusCodeGroup]int
 	requestsTime [3]time.Duration
+	ttfbTime     [3]time.Duration
 }
 
 func NewFetcher(url string, number int, concurrent int) *Fetcher {
@@ -90,9 +93,10 @@ func (f *Fetcher) calcSummary() Summary {
 		}
 	}
 
-	var totalDuration time.Duration
+	var totalDuration, totalTtfb time.Duration
 	for _, response := range f.responses {
 		totalDuration += response.Duration
+		totalTtfb += response.Ttfb
 	}
 	average := total / totalDuration.Seconds()
 	execTime := f.execTime
@@ -100,6 +104,10 @@ func (f *Fetcher) calcSummary() Summary {
 	min := f.stats.requestsTime[0]
 	max := f.stats.requestsTime[1]
 	mean := totalDuration.Seconds() / total
+
+	minTtfb := f.stats.ttfbTime[0]
+	maxTtfb := f.stats.ttfbTime[1]
+	meanTtfb := totalTtfb.Seconds() / total
 
 	return Summary{
 		total:         total,
@@ -113,6 +121,12 @@ func (f *Fetcher) calcSummary() Summary {
 			mean float64
 		}{
 			min, max, mean,
+		}, totalTtfbStats: struct {
+			min  time.Duration
+			max  time.Duration
+			mean float64
+		}{
+			minTtfb, maxTtfb, meanTtfb,
 		},
 	}
 }
@@ -122,6 +136,10 @@ type Summary struct {
 	execTime, totalDuration time.Duration
 	fails                   int
 	totalDurStats           struct {
+		min, max time.Duration
+		mean     float64
+	}
+	totalTtfbStats struct {
 		min, max time.Duration
 		mean     float64
 	}
@@ -136,7 +154,9 @@ func (f *Fetcher) genSummary(s Summary) string {
 		REQUEST_PER_SECOND_DISPLAY + fmt.Sprint(s.average) +
 		STATISTIC_HEADER_DISPLAY +
 		REQUEST_TIME_STATS_DISPLAY + fmt.Sprintf(
-		STATS_TEMPL, s.totalDurStats.min.Seconds(), s.totalDurStats.max.Seconds(), s.totalDurStats.mean)
+		STATS_TEMPL, s.totalDurStats.min.Seconds(), s.totalDurStats.max.Seconds(), s.totalDurStats.mean) +
+		TIME_TO_FIRST_BYTE_DISPLAY + fmt.Sprintf(
+		STATS_TEMPL, s.totalTtfbStats.min.Seconds(), s.totalTtfbStats.max.Seconds(), s.totalTtfbStats.mean)
 }
 
 func (f *Fetcher) Display() {
@@ -159,8 +179,23 @@ func (f *Fetcher) Run() {
 }
 
 func (f *Fetcher) fetch() Response {
-	start := time.Now()
-	resp, err := http.Get(f.url)
+
+	req, err := http.NewRequest("GET", f.url, nil)
+	if err != nil {
+		log.Println(err)
+		return Response{}
+	}
+
+	var start time.Time
+	var ttfb time.Duration
+	trace := &httptrace.ClientTrace{GotFirstResponseByte: func() {
+		ttfb = time.Since(start)
+	}}
+
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	client := &http.Client{}
+	start = time.Now()
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Println(err)
 		return Response{
@@ -171,6 +206,7 @@ func (f *Fetcher) fetch() Response {
 	return Response{
 		Code:     resp.StatusCode,
 		Duration: time.Since(start),
+		Ttfb:     ttfb,
 	}
 }
 
@@ -185,6 +221,7 @@ func (f *Fetcher) sequenceFetching() {
 func (f *Fetcher) genStats(res Response) {
 	f.countStatusCode(res.Code)
 	f.findMaxMinDur(res.Duration)
+	f.findMaxMinTtfb(res.Ttfb)
 }
 
 func (f *Fetcher) findMaxMinDur(t time.Duration) {
@@ -198,6 +235,20 @@ func (f *Fetcher) findMaxMinDur(t time.Duration) {
 	// If zero valued or larger than current max, then replace
 	if curMax == 0 || t > curMax {
 		f.stats.requestsTime[1] = t
+	}
+}
+
+func (f *Fetcher) findMaxMinTtfb(t time.Duration) {
+	curMin := f.stats.ttfbTime[0]
+	// Only if t is smaller then current min, then replace
+	if curMin == 0 || t < curMin {
+		f.stats.ttfbTime[0] = t
+	}
+
+	curMax := f.stats.ttfbTime[1]
+	// If zero valued or larger than current max, then replace
+	if curMax == 0 || t > curMax {
+		f.stats.ttfbTime[1] = t
 	}
 }
 
@@ -278,6 +329,7 @@ func (f *Fetcher) countStatusCode(code int) {
 type Response struct {
 	Code     int
 	Duration time.Duration
+	Ttfb     time.Duration
 }
 
 func logTime() func() time.Duration {

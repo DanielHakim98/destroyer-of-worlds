@@ -19,16 +19,17 @@ func main() {
 		if _, err := os.Stat(parent); os.IsNotExist(err) {
 			err := os.MkdirAll(parent, os.ModePerm)
 			if err != nil {
-				fmt.Println("Error: Failed to create directory from PPROF_PATH")
+				fmt.Fprintln(os.Stderr, "Error: Failed to create directory from PPROF_PATH")
 				os.Exit(1)
 			}
 		}
 
 		f, err := os.Create(profilingPath)
 		if err != nil {
-			fmt.Println("Error: Failed to create file from PPROF_PATH")
+			fmt.Fprintln(os.Stderr, "Error: Failed to create file from PPROF_PATH")
 			os.Exit(1)
 		}
+		defer f.Close()
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}

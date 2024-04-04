@@ -27,16 +27,16 @@ var rootCmd = &cobra.Command{
 	Well I have great news for you, This is the tool you can use to accomplish your goal`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if _url == "" {
-			fmt.Println(cmd.Help())
-			fmt.Println()
-			fmt.Println("Error: URL not provided. Please specify a URL using the --url flag.")
+			fmt.Fprintln(os.Stderr, cmd.Help())
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, "Error: URL not provided. Please specify a URL using the --url flag.")
 			os.Exit(1)
 		}
 
 		if _concurrent <= 0 {
-			fmt.Println(cmd.Help())
-			fmt.Println()
-			fmt.Println("Error: Concurrent worker cannot be zero or negative. Please specify value more than 0")
+			fmt.Fprintln(os.Stderr, cmd.Help())
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, "Error: Concurrent worker cannot be zero or negative. Please specify value more than 0")
 			os.Exit(1)
 		}
 

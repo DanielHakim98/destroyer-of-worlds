@@ -47,8 +47,10 @@ type Fetcher struct {
 	fetchType FetchType
 	responses []Response
 	execTime  time.Duration
-	summary   map[StatusCodeGroup]int
-	stats     Stats
+
+	// mu      sync.Mutex
+	summary map[StatusCodeGroup]int
+	stats   Stats
 }
 
 type Stats struct {
@@ -296,8 +298,10 @@ func (f *Fetcher) worker(wg *sync.WaitGroup, results chan<- Response, tasks <-ch
 func (f *Fetcher) consumer(wg *sync.WaitGroup, results <-chan Response) {
 	defer wg.Done()
 	for res := range results {
+		// f.mu.Lock()
 		f.genStats(res)
 		f.responses = append(f.responses, res)
+		// f.mu.Unlock()
 	}
 }
 
@@ -305,7 +309,7 @@ func (f *Fetcher) concurrentFetching(url string, numTasks int, numWorkers int) {
 	results := make(chan Response, numTasks)
 	tasks := make(chan Task, numWorkers)
 
-	numConsumers := 1
+	numConsumers := 1 // anything higher than 1 will cause race condition on among consumers
 	wgConsumer := new(sync.WaitGroup)
 	for c := 0; c < numConsumers; c++ {
 		wgConsumer.Add(1)

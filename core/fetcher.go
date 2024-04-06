@@ -41,13 +41,13 @@ const (
 )
 
 type Fetcher struct {
-	url       string
 	quantity  int
 	limit     int
 	fetchType FetchType
 	responses []Response
 	execTime  time.Duration
 
+	url string
 	// mu      sync.Mutex
 	summary map[StatusCodeGroup]int
 	stats   Stats

@@ -252,52 +252,83 @@ func (f *Fetcher) findMaxMinTtfb(t time.Duration) {
 	}
 }
 
-func (f *Fetcher) concurrentFetching(url string, number int, maxConcurrent int) {
-	message := make(chan Response, number)
-	sem := make(chan struct{}, maxConcurrent)
-
-	var wg sync.WaitGroup
-	for i := range number {
-		wg.Add(1)
-		go f.worker(&wg, sem, url, message)
-		if i%maxConcurrent == 0 && i != number {
-			time.Sleep(50 * time.Millisecond)
-		}
+func (f *Fetcher) request(url string) (resp *http.Response, err error) {
+	client := http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	go func() {
-		wg.Wait()
-		close(message)
+	resp, err = client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = resp.Body.Close()
 	}()
 
-	for result := range message {
-		f.genStats(result)
-		f.responses = append(f.responses, result)
+	return resp, nil
+}
+
+type Task struct {
+	url string
+}
+
+func (f *Fetcher) worker(wg *sync.WaitGroup, results chan<- Response, tasks <-chan Task) {
+	defer wg.Done()
+	for task := range tasks {
+		start := time.Now()
+		resp, err := f.request(task.url)
+		if err != nil {
+			results <- Response{
+				Duration: time.Since(start),
+			}
+			continue
+		}
+
+		results <- Response{
+			Code:     resp.StatusCode,
+			Duration: time.Since(start),
+		}
 	}
 }
 
-func (f *Fetcher) worker(wg *sync.WaitGroup, sem chan struct{}, url string, message chan<- Response) {
-	sem <- struct{}{}
-	defer func() {
-		wg.Done()
-		<-sem
-	}()
+func (f *Fetcher) consumer(wg *sync.WaitGroup, results <-chan Response) {
+	defer wg.Done()
+	for res := range results {
+		f.genStats(res)
+		f.responses = append(f.responses, res)
+	}
+}
 
-	start := time.Now()
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Println(err)
-		message <- Response{
-			Duration: time.Since(start),
+func (f *Fetcher) concurrentFetching(url string, numTasks int, numWorkers int) {
+	results := make(chan Response, numTasks)
+	tasks := make(chan Task, numWorkers)
+
+	numConsumers := 1
+	wgConsumer := new(sync.WaitGroup)
+	for c := 0; c < numConsumers; c++ {
+		wgConsumer.Add(1)
+		go f.consumer(wgConsumer, results)
+	}
+
+	wgWorker := new(sync.WaitGroup)
+	for w := 0; w < numWorkers; w++ {
+		wgWorker.Add(1)
+		go f.worker(wgWorker, results, tasks)
+	}
+
+	for t := 0; t < numTasks; t++ {
+		tasks <- Task{
+			url: url,
 		}
-		return
 	}
-	defer resp.Body.Close()
+	close(tasks)
+	wgWorker.Wait()
 
-	message <- Response{
-		Code:     resp.StatusCode,
-		Duration: time.Since(start),
-	}
+	close(results)
+	wgConsumer.Wait()
+
 }
 
 func (f *Fetcher) countStatusCode(code int) {

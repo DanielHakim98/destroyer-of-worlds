@@ -85,6 +85,12 @@ func (f *Fetcher) Summary() {
 	fmt.Println(summaryStr)
 }
 
+type StatsSummary struct {
+	min  time.Duration
+	max  time.Duration
+	mean float64
+}
+
 func (f *Fetcher) calcSummary() Summary {
 	total := float64(f.quantity)
 	var fails int
@@ -117,17 +123,9 @@ func (f *Fetcher) calcSummary() Summary {
 		execTime:      execTime,
 		totalDuration: totalDuration,
 		fails:         fails,
-		totalDurStats: struct {
-			min  time.Duration
-			max  time.Duration
-			mean float64
-		}{
+		totalDurStats: StatsSummary{
 			min, max, mean,
-		}, totalTtfbStats: struct {
-			min  time.Duration
-			max  time.Duration
-			mean float64
-		}{
+		}, totalTtfbStats: StatsSummary{
 			minTtfb, maxTtfb, meanTtfb,
 		},
 	}
@@ -137,14 +135,8 @@ type Summary struct {
 	total, average          float64
 	execTime, totalDuration time.Duration
 	fails                   int
-	totalDurStats           struct {
-		min, max time.Duration
-		mean     float64
-	}
-	totalTtfbStats struct {
-		min, max time.Duration
-		mean     float64
-	}
+	totalDurStats           StatsSummary
+	totalTtfbStats          StatsSummary
 }
 
 func (f *Fetcher) genSummary(s Summary) string {
